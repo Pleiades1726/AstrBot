@@ -1,0 +1,33 @@
+--- a/astrbot/core/agent/runners/tool_loop_agent_runner.py
++++ b/astrbot/core/agent/runners/tool_loop_agent_runner.py
+@@ -183,11 +183,17 @@ class ToolLoopAgentRunner(BaseAgentRunner):
+         """Finalize the current step as a plain assistant response with no tool calls."""
+         self.final_llm_resp = llm_resp
+         self._transition_state(AgentState.DONE)
+         self.stats.end_time = time.time()
++        # 以下模型要求 assistant 历史消息中必须存在 reasoning_content 字段，
++        # 即使是空字符串也要保留，否则下一轮 API 会报错。
++        model_name = (self.req.model or "").lower()
++        _deepseek_reasoning_models = {"deepseek-v4-pro", "deepseek-v4-flash"}
++        is_deepseek_reasoning = model_name in _deepseek_reasoning_models
++
+         parts = []
+-        if llm_resp.reasoning_content or llm_resp.reasoning_signature:
+-            parts.append(
+-                ThinkPart(
+-                    think=llm_resp.reasoning_content,
+-                    encrypted=llm_resp.reasoning_signature,
+-                )
+-            )
++        if is_deepseek_reasoning:
++            # DeepSeek：无论是否有推理内容，都存入 ThinkPart
++            parts.append(ThinkPart(think=llm_resp.reasoning_content, encrypted=llm_resp.reasoning_signature))
++        elif llm_resp.reasoning_content or llm_resp.reasoning_signature:
++            parts.append(
++                ThinkPart(
++                    think=llm_resp.reasoning_content,
++                    encrypted=llm_resp.reasoning_signature,
++                )
++            )
+         if llm_resp.completion_text:
+             parts.append(TextPart(text=llm_resp.completion_text))
